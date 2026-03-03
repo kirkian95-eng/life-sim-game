@@ -38,6 +38,13 @@ life-sim-game/
 - Name game entities and systems descriptively (e.g., `Creature`, `Ecosystem`, `FoodWeb`)
 - Add comments only where the logic isn't self-evident
 
+## Mandatory Rules
+
+These rules apply to every session and every change:
+
+1. **Maintain DECISIONS.md**: For every major architecture change, new dependency, or resource/tooling choice — add an entry to `DECISIONS.md` with the decision, alternatives considered, tradeoffs, and reasoning. This is non-negotiable.
+2. **Keep CLAUDE.md current**: Update this file whenever the repo structure, tech stack, or workflows change.
+
 ## Key Conventions for AI Assistants
 
 ### Before Making Changes
