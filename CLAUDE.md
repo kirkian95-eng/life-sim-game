@@ -9,6 +9,7 @@
 ```
 life-sim-game/
 ├── CLAUDE.md        # This file — AI assistant guide
+├── DECISIONS.md     # Architecture & dependency decision log
 └── README.md        # Project description
 ```
 
@@ -57,6 +58,7 @@ life-sim-game/
 - Each game system (e.g., creatures, terrain, resources) should be modular
 - New systems should integrate with existing ones through clear interfaces
 - Update this CLAUDE.md when adding major new directories or systems
+- **Update DECISIONS.md** for every major architecture choice, new dependency, or resource tradeoff — log what was decided, what alternatives were considered, and the reasoning
 
 ### Testing
 
