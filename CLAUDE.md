@@ -8,20 +8,32 @@
 
 ```
 life-sim-game/
-├── CLAUDE.md        # This file — AI assistant guide
-├── DECISIONS.md     # Architecture & dependency decision log
-└── README.md        # Project description
+├── simulation/
+│   ├── __init__.py
+│   ├── engine.py        # Ecosystem class — tick loop with 5 phases
+│   ├── species.py       # Species/SpeciesConfig dataclasses, default params
+│   └── food_web.py      # FoodWeb class — predator-prey relationships
+├── tests/
+│   ├── __init__.py
+│   ├── test_engine.py   # Ecosystem tick, phase, and stability tests
+│   ├── test_species.py  # Species behavior and default config tests
+│   └── test_food_web.py # Food web relationship tests
+├── app.py               # Flask REST API
+├── requirements.txt     # flask, pytest
+├── PLAN.md              # Design plan and parameter tables
+├── DECISIONS.md         # Architecture & dependency decision log
+├── CLAUDE.md            # This file — AI assistant guide
+└── README.md            # Project description
 ```
-
-> As the project grows, update this section to reflect new directories (e.g., `src/`, `assets/`, `tests/`, `public/`).
 
 ## Development Workflow
 
 ### Getting Started
 
 1. Clone the repo and check out your feature branch
-2. Install dependencies (once a package manager is configured)
-3. Run the dev server (once set up)
+2. `pip install -r requirements.txt`
+3. `python -m pytest tests/` to verify everything works
+4. `python app.py` to start the Flask dev server on port 5000
 
 ### Git Conventions
 
@@ -75,18 +87,19 @@ These rules apply to every session and every change:
 
 ## Tech Stack
 
-> To be determined as the project takes shape. Update this section when a framework, engine, or language is chosen.
+- **Language**: Python 3.11+
+- **Web framework**: Flask 3.x (minimal REST API)
+- **Testing**: pytest 8.x
+- **Simulation model**: Tick-based discrete simulation with Holling Type II predation
 
 ## Common Tasks
 
 | Task | Command |
 |------|---------|
-| Install dependencies | _TBD_ |
-| Run dev server | _TBD_ |
-| Run tests | _TBD_ |
-| Build for production | _TBD_ |
-
-> Fill in commands as the toolchain is established.
+| Install dependencies | `pip install -r requirements.txt` |
+| Run dev server | `python app.py` |
+| Run tests | `python -m pytest tests/` |
+| Run tests verbose | `python -m pytest tests/ -v` |
 
 ## Game Design Context
 
