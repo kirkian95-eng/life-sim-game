@@ -78,10 +78,10 @@ class Ecosystem:
 
                 food_obtained = min(food_wanted, max_catchable)
 
-                # For animal prey, each unit of food = 1 individual killed
-                # For grass, food units are biomass
-                prey.apply_deaths(food_obtained)
-                total_food_obtained += food_obtained
+                # apply_deaths floors to int for animals, so prey die
+                # in whole numbers. Track actual kills for fed ratio.
+                actual_killed = prey.apply_deaths(food_obtained)
+                total_food_obtained += actual_killed
 
             if total_food_needed > 0:
                 fed_ratio[predator_name] = min(1.0, total_food_obtained / total_food_needed)
@@ -126,10 +126,11 @@ class Ecosystem:
             sp.apply_deaths(deaths + crowding_deaths)
 
     def _clamp_populations(self):
-        """Floor populations at 0, and kill off anything below 1 individual."""
+        """Enforce population constraints: integer animals, minimum viable populations."""
         for sp in self.species.values():
-            if sp.population < 1.0:
-                sp.population = 0.0
+            if sp.population < 0:
+                sp.population = 0
+            sp.check_viable()
 
     def reset(self):
         """Reset to initial conditions."""

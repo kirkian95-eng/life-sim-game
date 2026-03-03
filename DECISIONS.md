@@ -107,6 +107,28 @@ This file tracks major decisions made during development of life-sim-game. Every
 
 ---
 
+### 006 — Integer animal populations with floor rounding (2026-03-03)
+
+**Decision**: Animal populations are enforced as `int` at all times. Deaths and births are floored to whole numbers (`math.floor`). Grass remains `float` (represents biomass, not individuals). A `min_viable_population` threshold (default 2 for animals) causes extinction when a population drops below it.
+
+**Alternatives considered**:
+- Round at tick boundary only (keep floats internally, round at end of tick) — simpler but allows fractional animals during phase calculations
+- Stochastic rounding (2.7 kills → 3 with 70% chance, 2 with 30%) — statistically unbiased but adds randomness
+- Accumulator pattern (track fractional remainder and carry over between ticks) — preserves precision but adds complexity
+
+**Tradeoffs**:
+- (+) No fractional animals ever — population is always a meaningful whole number
+- (+) Floor rounding is deterministic and easy to reason about
+- (+) Minimum viable population prevents unrealistic 1-animal "species" surviving indefinitely
+- (-) Floor rounding biases toward slightly lower deaths and births — small populations may stagnate
+- (-) At very low populations (2-5), floor(reproduction) often = 0, making recovery harder
+
+**Impact on stability**: Integer math actually improved predator equilibrium populations (wolf 2→7, eagle 1→13) because floor rounding on deaths protects small populations from the slow fractional bleed that was happening before.
+
+**Status**: Active
+
+---
+
 <!-- TEMPLATE — copy this for new entries
 
 ### NNN — Short title (YYYY-MM-DD)

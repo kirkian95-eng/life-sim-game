@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass, field
 
 
@@ -12,31 +13,48 @@ class SpeciesConfig:
     starvation_rate: float      # fraction that die when food is insufficient
     natural_death_rate: float   # base mortality per tick
     max_population: float       # soft carrying capacity
+    min_viable_population: int = 0  # below this, species goes extinct
 
 
 @dataclass
 class Species:
-    """A species in the ecosystem with config and mutable state."""
+    """A species in the ecosystem with config and mutable state.
+
+    Grass (trophic_level=0) uses float populations representing biomass.
+    Animals (trophic_level>0) use integer populations — no fractional animals.
+    """
     config: SpeciesConfig
-    population: float
+    population: float  # int for animals, float for grass
 
     @property
     def name(self) -> str:
         return self.config.name
 
     @property
+    def is_animal(self) -> bool:
+        return self.config.trophic_level > 0
+
+    @property
     def is_alive(self) -> bool:
-        return self.population >= 1.0
+        return self.population >= 1
 
     def apply_deaths(self, count: float) -> float:
-        """Remove individuals from population. Returns actual deaths."""
+        """Remove individuals. Animals die in whole numbers (floored)."""
+        if self.is_animal:
+            count = math.floor(count)
         actual = min(count, self.population)
-        self.population = max(0.0, self.population - actual)
+        self.population = max(0, self.population - actual)
+        if self.is_animal:
+            self.population = int(self.population)
         return actual
 
     def apply_births(self, count: float) -> float:
-        """Add individuals to population. Returns actual births."""
+        """Add individuals. Animals are born in whole numbers (floored)."""
+        if self.is_animal:
+            count = math.floor(count)
         self.population += count
+        if self.is_animal:
+            self.population = int(self.population)
         return count
 
     def crowding_factor(self) -> float:
@@ -44,6 +62,12 @@ class Species:
         if self.config.max_population <= 0:
             return 0.0
         return min(1.0, self.population / self.config.max_population)
+
+    def check_viable(self):
+        """If population is below minimum viable threshold, species goes extinct."""
+        mvp = self.config.min_viable_population
+        if mvp > 0 and 0 < self.population < mvp:
+            self.population = 0
 
 
 def create_default_species() -> dict[str, Species]:
@@ -58,6 +82,7 @@ def create_default_species() -> dict[str, Species]:
             starvation_rate=0.0,
             natural_death_rate=0.0,
             max_population=5000.0,
+            min_viable_population=0,
         ),
         "rabbit": SpeciesConfig(
             name="rabbit",
@@ -67,7 +92,8 @@ def create_default_species() -> dict[str, Species]:
             reproduction_rate=0.45,
             starvation_rate=0.30,
             natural_death_rate=0.05,
-            max_population=400.0,
+            max_population=400,
+            min_viable_population=2,
         ),
         "deer": SpeciesConfig(
             name="deer",
@@ -77,7 +103,8 @@ def create_default_species() -> dict[str, Species]:
             reproduction_rate=0.18,
             starvation_rate=0.25,
             natural_death_rate=0.03,
-            max_population=150.0,
+            max_population=150,
+            min_viable_population=2,
         ),
         "snake": SpeciesConfig(
             name="snake",
@@ -87,7 +114,8 @@ def create_default_species() -> dict[str, Species]:
             reproduction_rate=0.10,
             starvation_rate=0.35,
             natural_death_rate=0.04,
-            max_population=80.0,
+            max_population=80,
+            min_viable_population=2,
         ),
         "wolf": SpeciesConfig(
             name="wolf",
@@ -97,7 +125,8 @@ def create_default_species() -> dict[str, Species]:
             reproduction_rate=0.10,
             starvation_rate=0.30,
             natural_death_rate=0.03,
-            max_population=50.0,
+            max_population=50,
+            min_viable_population=2,
         ),
         "eagle": SpeciesConfig(
             name="eagle",
@@ -107,17 +136,18 @@ def create_default_species() -> dict[str, Species]:
             reproduction_rate=0.10,
             starvation_rate=0.25,
             natural_death_rate=0.03,
-            max_population=40.0,
+            max_population=40,
+            min_viable_population=2,
         ),
     }
 
     populations = {
         "grass": 3000.0,
-        "rabbit": 200.0,
-        "deer": 80.0,
-        "snake": 30.0,
-        "wolf": 20.0,
-        "eagle": 15.0,
+        "rabbit": 200,
+        "deer": 80,
+        "snake": 30,
+        "wolf": 20,
+        "eagle": 15,
     }
 
     return {

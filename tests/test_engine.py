@@ -170,6 +170,36 @@ class TestReset:
         assert len(eco.history) == 1
 
 
+class TestIntegerInvariant:
+    """Animal populations must be whole numbers after every tick."""
+
+    def test_animal_populations_are_int_after_each_tick(self):
+        eco = Ecosystem()
+        for i in range(100):
+            eco.tick()
+            for name, sp in eco.species.items():
+                if sp.is_animal:
+                    assert isinstance(sp.population, int), (
+                        f"{name} has non-int population {sp.population} at tick {i+1}"
+                    )
+
+    def test_no_negative_populations(self):
+        eco = Ecosystem()
+        for i in range(100):
+            eco.tick()
+            for name, sp in eco.species.items():
+                assert sp.population >= 0, (
+                    f"{name} has negative population {sp.population} at tick {i+1}"
+                )
+
+    def test_mvp_enforced_on_small_populations(self):
+        """Species at population 1 with mvp=2 should go extinct after tick."""
+        eco = Ecosystem()
+        eco.species["eagle"].population = 1
+        eco.tick()
+        assert eco.species["eagle"].population == 0
+
+
 class TestStability:
     """Run the simulation for many ticks and verify no species goes extinct."""
 
@@ -187,7 +217,7 @@ class TestStability:
         for name, sp in eco.species.items():
             cap = sp.config.max_population
             assert sp.population < cap * 3, (
-                f"{name} population {sp.population:.0f} exceeded 3x its cap {cap}"
+                f"{name} population {sp.population} exceeded 3x its cap {cap}"
             )
 
     def test_grass_never_fully_depleted(self):
