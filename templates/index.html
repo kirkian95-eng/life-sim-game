@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecosystem Simulator</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header id="header">
+        <h1>Ecosystem Simulator</h1>
+        <div id="controls">
+            <button id="btn-play" onclick="togglePlay()">Play</button>
+            <button id="btn-step" onclick="stepOnce()">Step</button>
+            <button id="btn-reset" onclick="resetSim()">Reset</button>
+            <label id="speed-label">
+                Speed
+                <input type="range" id="speed-slider" min="1" max="20" value="5">
+            </label>
+        </div>
+    </header>
+
+    <!-- Status bar -->
+    <div id="status-bar">
+        <span id="tick-display">Tick: 0</span>
+        <span class="pop-badge" data-species="grass">&#x1F33F; Grass: <b id="pop-grass">3000</b></span>
+        <span class="pop-badge" data-species="rabbit">&#x1F430; Rabbit: <b id="pop-rabbit">200</b></span>
+        <span class="pop-badge" data-species="deer">&#x1F98C; Deer: <b id="pop-deer">80</b></span>
+        <span class="pop-badge" data-species="snake">&#x1F40D; Snake: <b id="pop-snake">30</b></span>
+        <span class="pop-badge" data-species="wolf">&#x1F43A; Wolf: <b id="pop-wolf">20</b></span>
+        <span class="pop-badge" data-species="eagle">&#x1F985; Eagle: <b id="pop-eagle">15</b></span>
+    </div>
+
+    <!-- Main content -->
+    <div id="main">
+        <div id="canvas-container"></div>
+        <div id="charts">
+            <div id="population-chart"></div>
+            <div id="food-web-chart"></div>
+        </div>
+    </div>
+
+    <script>
+    // ─── Config ──────────────────────────────────────────────────
+    const SPECIES_CONFIG = {
+        grass:  { emoji: '\u{1F33F}', color: '#4CAF50', size: 10, trophic: 0 },
+        rabbit: { emoji: '\u{1F430}', color: '#FF9800', size: 16, trophic: 1 },
+        deer:   { emoji: '\u{1F98C}', color: '#795548', size: 20, trophic: 1 },
+        snake:  { emoji: '\u{1F40D}', color: '#9C27B0', size: 14, trophic: 2 },
+        wolf:   { emoji: '\u{1F43A}', color: '#607D8B', size: 18, trophic: 2 },
+        eagle:  { emoji: '\u{1F985}', color: '#2196F3', size: 16, trophic: 2 },
+    };
+
+    // Max visible creatures per species on canvas (for performance)
+    const MAX_VISIBLE = { grass: 60, rabbit: 40, deer: 20, snake: 15, wolf: 12, eagle: 10 };
+
+    // ─── State ───────────────────────────────────────────────────
+    let playing = false;
+    let tickInterval = null;
+    let populations = {};
+    let tickCount = 0;
+    let creatures = []; // {species, x, y, vx, vy, age, dying}
+
+    // ─── ECharts instances ───────────────────────────────────────
+    let popChart = null;
+    let webChart = null;
+    let popHistory = {};  // species_name -> [values]
+    let tickHistory = []; // [tick numbers]
+
+    // ─── API helpers ─────────────────────────────────────────────
+    async function apiPost(path, body = {}) {
+        const res = await fetch(path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        return res.json();
+    }
+    async function apiGet(path) {
+        const res = await fetch(path);
+        return res.json();
+    }
+
+    // ─── Simulation controls ────────────────────────────────────
+    function togglePlay() {
+        playing = !playing;
+        document.getElementById('btn-play').textContent = playing ? 'Pause' : 'Play';
+        if (playing) {
+            scheduleNextTick();
+        } else {
+            clearTimeout(tickInterval);
+        }
+    }
+
+    function scheduleNextTick() {
+        if (!playing) return;
+        const speed = parseInt(document.getElementById('speed-slider').value);
+        const delay = Math.max(50, 1000 / speed);
+        tickInterval = setTimeout(async () => {
+            await doTick();
+            scheduleNextTick();
+        }, delay);
+    }
+
+    async function stepOnce() {
+        if (playing) return;
+        await doTick();
+    }
+
+    async function doTick() {
+        const data = await apiPost('/api/simulation/tick', { ticks: 1 });
+        tickCount = data.tick;
+        populations = data.populations;
+        updateStatusBar();
+        updatePopChart();
+        syncCreatures();
+    }
+
+    async function resetSim() {
+        playing = false;
+        clearTimeout(tickInterval);
+        document.getElementById('btn-play').textContent = 'Play';
+        await apiPost('/api/simulation/reset');
+        const data = await apiGet('/api/simulation/state');
+        tickCount = data.tick;
+        populations = data.populations;
+
+        // Reset chart data
+        popHistory = {};
+        tickHistory = [0];
+        for (const name of Object.keys(SPECIES_CONFIG)) {
+            popHistory[name] = [populations[name] || 0];
+        }
+        updateStatusBar();
+        rebuildPopChart();
+        creatures = [];
+        syncCreatures();
+        await loadFoodWeb();
+    }
+
+    // ─── Status bar ─────────────────────────────────────────────
+    function updateStatusBar() {
+        document.getElementById('tick-display').textContent = `Tick: ${tickCount}`;
+        for (const name of Object.keys(SPECIES_CONFIG)) {
+            const el = document.getElementById(`pop-${name}`);
+            if (el) el.textContent = Math.round(populations[name] || 0);
+        }
+    }
+
+    // ─── Population chart (ECharts) ─────────────────────────────
+    function initPopChart() {
+        popChart = echarts.init(document.getElementById('population-chart'));
+        rebuildPopChart();
+        window.addEventListener('resize', () => popChart.resize());
+    }
+
+    function rebuildPopChart() {
+        const series = Object.entries(SPECIES_CONFIG).map(([name, cfg]) => ({
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            type: 'line',
+            smooth: true,
+            symbol: 'none',
+            lineStyle: { width: 2 },
+            itemStyle: { color: cfg.color },
+            data: (popHistory[name] || []).map((val, i) => [tickHistory[i] || i, val]),
+        }));
+
+        popChart.setOption({
+            title: { text: 'Population Over Time', left: 'center', textStyle: { fontSize: 14, color: '#e0e0e0' } },
+            tooltip: { trigger: 'axis' },
+            legend: {
+                bottom: 0,
+                textStyle: { color: '#ccc' },
+                data: Object.keys(SPECIES_CONFIG).map(n => n.charAt(0).toUpperCase() + n.slice(1)),
+            },
+            grid: { top: 40, right: 20, bottom: 40, left: 55 },
+            xAxis: {
+                type: 'value',
+                name: 'Tick',
+                nameTextStyle: { color: '#aaa' },
+                axisLine: { lineStyle: { color: '#555' } },
+                axisLabel: { color: '#aaa' },
+            },
+            yAxis: {
+                type: 'value',
+                name: 'Population',
+                nameTextStyle: { color: '#aaa' },
+                axisLine: { lineStyle: { color: '#555' } },
+                axisLabel: { color: '#aaa' },
+                splitLine: { lineStyle: { color: '#333' } },
+            },
+            series: series,
+            backgroundColor: 'transparent',
+            animation: false,
+        }, true);
+    }
+
+    function updatePopChart() {
+        tickHistory.push(tickCount);
+        for (const name of Object.keys(SPECIES_CONFIG)) {
+            if (!popHistory[name]) popHistory[name] = [];
+            popHistory[name].push(populations[name] || 0);
+        }
+
+        // Keep last 500 data points for performance
+        if (tickHistory.length > 500) {
+            tickHistory.shift();
+            for (const name of Object.keys(SPECIES_CONFIG)) {
+                popHistory[name].shift();
+            }
+        }
+
+        const series = Object.entries(SPECIES_CONFIG).map(([name, cfg]) => ({
+            data: popHistory[name].map((val, i) => [tickHistory[i], val]),
+        }));
+        popChart.setOption({ series });
+    }
+
+    // ─── Food web chart (ECharts graph) ─────────────────────────
+    function initWebChart() {
+        webChart = echarts.init(document.getElementById('food-web-chart'));
+        loadFoodWeb();
+        window.addEventListener('resize', () => webChart.resize());
+    }
+
+    async function loadFoodWeb() {
+        const data = await apiGet('/api/simulation/food-web');
+
+        // Position nodes by trophic level
+        const trophicX = { 0: 200, 1: 200, 2: 200 };
+        const trophicSlots = { 0: [], 1: [], 2: [] };
+        for (const node of data.nodes) {
+            trophicSlots[node.trophic_level].push(node);
+        }
+
+        const nodes = [];
+        for (const [trophic, group] of Object.entries(trophicSlots)) {
+            const t = parseInt(trophic);
+            const y = [350, 200, 50][t]; // top predators at top
+            const count = group.length;
+            group.forEach((node, i) => {
+                const x = (i + 1) * 400 / (count + 1);
+                const cfg = SPECIES_CONFIG[node.name];
+                const popRatio = node.population / node.max_population;
+                nodes.push({
+                    name: node.name.charAt(0).toUpperCase() + node.name.slice(1),
+                    x: x,
+                    y: y,
+                    symbolSize: 30 + popRatio * 30,
+                    itemStyle: { color: cfg.color },
+                    label: {
+                        show: true,
+                        formatter: `${cfg.emoji}\n{pop|${Math.round(node.population)}}`,
+                        rich: { pop: { fontSize: 10, color: '#aaa', lineHeight: 16 } },
+                    },
+                });
+            });
+        }
+
+        const links = data.edges.map(e => ({
+            source: e.prey.charAt(0).toUpperCase() + e.prey.slice(1),
+            target: e.predator.charAt(0).toUpperCase() + e.predator.slice(1),
+            lineStyle: {
+                width: 1 + e.preference * 3,
+                color: '#888',
+                curveness: 0.2,
+            },
+        }));
+
+        webChart.setOption({
+            title: { text: 'Food Web', left: 'center', textStyle: { fontSize: 14, color: '#e0e0e0' } },
+            tooltip: {
+                formatter: function(params) {
+                    if (params.dataType === 'edge') {
+                        return `${params.data.source} → ${params.data.target}<br>Preference: ${((params.data.lineStyle.width - 1) / 3 * 100).toFixed(0)}%`;
+                    }
+                    return params.name;
+                }
+            },
+            series: [{
+                type: 'graph',
+                layout: 'none',
+                data: nodes,
+                links: links,
+                edgeSymbol: ['none', 'arrow'],
+                edgeSymbolSize: 10,
+                label: { show: true, fontSize: 14 },
+                emphasis: {
+                    focus: 'adjacency',
+                    lineStyle: { width: 4 },
+                },
+            }],
+            backgroundColor: 'transparent',
+        }, true);
+    }
+
+    // ─── p5.js Ecosystem Canvas ─────────────────────────────────
+    let canvasW, canvasH;
+
+    function syncCreatures() {
+        // Add/remove creatures to match population counts
+        for (const [name, cfg] of Object.entries(SPECIES_CONFIG)) {
+            const currentPop = populations[name] || 0;
+            // Scale visible count
+            const maxVis = MAX_VISIBLE[name];
+            const targetVisible = Math.min(maxVis, Math.ceil(currentPop * maxVis / (cfg.trophic === 0 ? 5000 : SPECIES_CONFIG[name].size * 20)));
+
+            // Count current creatures of this species
+            const current = creatures.filter(c => c.species === name && !c.dying);
+            const diff = targetVisible - current.length;
+
+            if (diff > 0) {
+                // Spawn new creatures
+                for (let i = 0; i < diff; i++) {
+                    creatures.push(makeCreature(name));
+                }
+            } else if (diff < 0) {
+                // Mark excess for removal with death animation
+                let toRemove = -diff;
+                for (let i = creatures.length - 1; i >= 0 && toRemove > 0; i--) {
+                    if (creatures[i].species === name && !creatures[i].dying) {
+                        creatures[i].dying = 15; // 15 frames of death animation
+                        toRemove--;
+                    }
+                }
+            }
+        }
+    }
+
+    function makeCreature(species) {
+        const speed = species === 'grass' ? 0 : (SPECIES_CONFIG[species].trophic === 2 ? 1.5 : 1);
+        return {
+            species,
+            x: Math.random() * (canvasW || 600),
+            y: Math.random() * (canvasH || 500),
+            vx: (Math.random() - 0.5) * speed,
+            vy: (Math.random() - 0.5) * speed,
+            age: 0,
+            dying: 0,
+        };
+    }
+
+    // p5.js sketch
+    const sketch = (p) => {
+        p.setup = function() {
+            const container = document.getElementById('canvas-container');
+            canvasW = container.clientWidth;
+            canvasH = container.clientHeight;
+            const canvas = p.createCanvas(canvasW, canvasH);
+            canvas.parent(container);
+            p.textAlign(p.CENTER, p.CENTER);
+        };
+
+        p.windowResized = function() {
+            const container = document.getElementById('canvas-container');
+            canvasW = container.clientWidth;
+            canvasH = container.clientHeight;
+            p.resizeCanvas(canvasW, canvasH);
+        };
+
+        p.draw = function() {
+            // Sky gradient background
+            drawBackground(p);
+
+            // Update and draw creatures
+            for (let i = creatures.length - 1; i >= 0; i--) {
+                const c = creatures[i];
+
+                // Death animation
+                if (c.dying > 0) {
+                    c.dying--;
+                    const alpha = c.dying / 15;
+                    p.push();
+                    p.translate(c.x, c.y);
+                    p.scale(alpha);
+                    p.textSize(SPECIES_CONFIG[c.species].size);
+                    p.text(SPECIES_CONFIG[c.species].emoji, 0, 0);
+                    p.pop();
+                    if (c.dying <= 0) {
+                        creatures.splice(i, 1);
+                    }
+                    continue;
+                }
+
+                // Movement
+                if (c.species !== 'grass') {
+                    // Wander behavior
+                    c.vx += (Math.random() - 0.5) * 0.3;
+                    c.vy += (Math.random() - 0.5) * 0.3;
+                    // Dampen
+                    c.vx *= 0.95;
+                    c.vy *= 0.95;
+                    // Speed limit
+                    const maxSpeed = SPECIES_CONFIG[c.species].trophic === 2 ? 2.0 : 1.2;
+                    const speed = Math.sqrt(c.vx * c.vx + c.vy * c.vy);
+                    if (speed > maxSpeed) {
+                        c.vx = (c.vx / speed) * maxSpeed;
+                        c.vy = (c.vy / speed) * maxSpeed;
+                    }
+
+                    c.x += c.vx;
+                    c.y += c.vy;
+
+                    // Bounce off edges
+                    if (c.x < 10) { c.x = 10; c.vx = Math.abs(c.vx); }
+                    if (c.x > canvasW - 10) { c.x = canvasW - 10; c.vx = -Math.abs(c.vx); }
+                    if (c.y < 10) { c.y = 10; c.vy = Math.abs(c.vy); }
+                    if (c.y > canvasH - 10) { c.y = canvasH - 10; c.vy = -Math.abs(c.vy); }
+                } else {
+                    // Grass gently sways
+                    c.x += Math.sin(p.frameCount * 0.02 + c.age) * 0.1;
+                }
+
+                c.age++;
+
+                // Draw
+                p.textSize(SPECIES_CONFIG[c.species].size);
+                p.text(SPECIES_CONFIG[c.species].emoji, c.x, c.y);
+            }
+
+            // Draw tick counter on canvas
+            p.fill(255, 255, 255, 180);
+            p.noStroke();
+            p.textSize(11);
+            p.textAlign(p.LEFT, p.TOP);
+            p.text(`Tick ${tickCount}  |  ${creatures.filter(c => !c.dying).length} visible`, 8, 8);
+            p.textAlign(p.CENTER, p.CENTER);
+        };
+    };
+
+    function drawBackground(p) {
+        // Grass density affects green intensity
+        const grassPop = populations['grass'] || 0;
+        const greenIntensity = Math.min(1, grassPop / 5000);
+        const bgGreen = p.lerpColor(p.color(60, 40, 20), p.color(34, 80, 30), greenIntensity);
+
+        // Sky
+        for (let y = 0; y < canvasH * 0.3; y++) {
+            const inter = y / (canvasH * 0.3);
+            const c = p.lerpColor(p.color(25, 25, 50), p.color(60, 90, 60), inter);
+            p.stroke(c);
+            p.line(0, y, canvasW, y);
+        }
+        // Ground
+        p.noStroke();
+        p.fill(bgGreen);
+        p.rect(0, canvasH * 0.3, canvasW, canvasH * 0.7);
+
+        // Ground texture - some random darker patches
+        p.fill(0, 0, 0, 15);
+        for (let i = 0; i < 20; i++) {
+            const gx = ((i * 137 + 50) % canvasW);
+            const gy = canvasH * 0.3 + ((i * 89 + 30) % (canvasH * 0.7));
+            p.ellipse(gx, gy, 40 + (i % 3) * 20, 20 + (i % 2) * 10);
+        }
+    }
+
+    // ─── Init ────────────────────────────────────────────────────
+    async function init() {
+        // Load initial state
+        const data = await apiGet('/api/simulation/state');
+        tickCount = data.tick;
+        populations = data.populations;
+
+        // Init chart data
+        tickHistory = [0];
+        for (const name of Object.keys(SPECIES_CONFIG)) {
+            popHistory[name] = [populations[name] || 0];
+        }
+
+        updateStatusBar();
+        initPopChart();
+        initWebChart();
+        syncCreatures();
+    }
+
+    // Start p5 and init
+    new p5(sketch);
+    document.addEventListener('DOMContentLoaded', init);
+    // Also try init on load in case DOMContentLoaded already fired
+    if (document.readyState !== 'loading') init();
+    </script>
+</body>
+</html>

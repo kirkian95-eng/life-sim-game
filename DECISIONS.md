@@ -129,6 +129,30 @@ This file tracks major decisions made during development of life-sim-game. Every
 
 ---
 
+### 007 — Visualization: p5.js + Apache ECharts for dashboard (2026-03-04)
+
+**Decision**: Add a browser-based simulation dashboard using p5.js (animated ecosystem canvas with emoji creatures) and Apache ECharts (real-time population line chart + food web network graph). Both loaded from CDN — no build tooling required.
+
+**Alternatives considered**:
+- Chart.js + chartjs-plugin-streaming — simpler API but no built-in network graph, streaming plugin unmaintained
+- uPlot — smallest bundle (48 KB), best performance, but poor docs and no graph chart type
+- Plotly.js — scientific-quality charts with Python integration, but 3.6 MB bundle
+- ECharts alone (no p5.js) — charts only, no animated ecosystem view
+- Three.js / Phaser for 3D/2D game-style rendering — overkill for current scope
+
+**Tradeoffs**:
+- (+) ECharts handles both population time-series AND food web network graphs in a single library
+- (+) p5.js provides an engaging animated view of the ecosystem with minimal code
+- (+) CDN-only approach — no npm, no build step, keeps the project simple
+- (+) Declarative JSON config in ECharts pairs naturally with Flask REST endpoints
+- (-) Two frontend libraries (~1 MB ECharts + ~800 KB p5.js) is heavier than a charts-only approach
+- (-) p5.js canvas is cosmetic — not connected to actual simulation positions
+- (-) CDN dependency means no offline development without caching
+
+**Status**: Active
+
+---
+
 <!-- TEMPLATE — copy this for new entries
 
 ### NNN — Short title (YYYY-MM-DD)

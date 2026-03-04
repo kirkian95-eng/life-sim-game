@@ -13,12 +13,16 @@ life-sim-game/
 │   ├── engine.py        # Ecosystem class — tick loop with 5 phases
 │   ├── species.py       # Species/SpeciesConfig dataclasses, default params
 │   └── food_web.py      # FoodWeb class — predator-prey relationships
+├── templates/
+│   └── index.html       # Dashboard — p5.js canvas + ECharts charts
+├── static/
+│   └── style.css        # Dashboard layout and dark theme styles
 ├── tests/
 │   ├── __init__.py
 │   ├── test_engine.py   # Ecosystem tick, phase, and stability tests
 │   ├── test_species.py  # Species behavior and default config tests
 │   └── test_food_web.py # Food web relationship tests
-├── app.py               # Flask REST API
+├── app.py               # Flask REST API + dashboard route
 ├── requirements.txt     # flask, pytest
 ├── PLAN.md              # Design plan and parameter tables
 ├── DECISIONS.md         # Architecture & dependency decision log
@@ -88,9 +92,11 @@ These rules apply to every session and every change:
 ## Tech Stack
 
 - **Language**: Python 3.11+
-- **Web framework**: Flask 3.x (minimal REST API)
+- **Web framework**: Flask 3.x (minimal REST API + template rendering)
 - **Testing**: pytest 8.x
 - **Simulation model**: Tick-based discrete simulation with Holling Type II predation
+- **Frontend charting**: Apache ECharts 5.x (CDN) — population line chart + food web network graph
+- **Frontend animation**: p5.js 1.x (CDN) — animated ecosystem canvas with emoji creatures
 
 ## Common Tasks
 

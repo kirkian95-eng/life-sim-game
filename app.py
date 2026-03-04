@@ -1,8 +1,14 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from simulation.engine import Ecosystem
 
 app = Flask(__name__)
 ecosystem = Ecosystem()
+
+
+@app.route("/")
+def index():
+    """Serve the simulation dashboard."""
+    return render_template("index.html")
 
 
 @app.route("/api/simulation", methods=["POST"])
@@ -36,6 +42,27 @@ def get_history():
         "tick_count": ecosystem.tick_count,
         "history": ecosystem.history,
     })
+
+
+@app.route("/api/simulation/food-web", methods=["GET"])
+def get_food_web():
+    """Get food web structure for visualization."""
+    nodes = []
+    for name, sp in ecosystem.species.items():
+        nodes.append({
+            "name": name,
+            "trophic_level": sp.config.trophic_level,
+            "population": sp.population,
+            "max_population": sp.config.max_population,
+        })
+    edges = []
+    for edge in ecosystem.food_web.edges:
+        edges.append({
+            "predator": edge.predator,
+            "prey": edge.prey,
+            "preference": edge.preference,
+        })
+    return jsonify({"nodes": nodes, "edges": edges})
 
 
 @app.route("/api/simulation/reset", methods=["POST"])
