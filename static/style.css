@@ -1,0 +1,160 @@
+/* Ecosystem Simulator Dashboard */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header */
+#header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: #16213e;
+    border-bottom: 1px solid #333;
+    flex-shrink: 0;
+}
+
+#header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #8bc34a;
+}
+
+#controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#controls button {
+    padding: 6px 16px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background: #2a2a4a;
+    color: #e0e0e0;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+}
+
+#controls button:hover {
+    background: #3a3a5a;
+}
+
+#speed-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #aaa;
+}
+
+#speed-slider {
+    width: 80px;
+    accent-color: #8bc34a;
+}
+
+/* Status bar */
+#status-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 6px 16px;
+    background: #0f3460;
+    border-bottom: 1px solid #333;
+    font-size: 13px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+#tick-display {
+    font-weight: 600;
+    color: #8bc34a;
+    min-width: 80px;
+}
+
+.pop-badge {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.pop-badge b {
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Main layout */
+#main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+#canvas-container {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    border-right: 1px solid #333;
+}
+
+#canvas-container canvas {
+    display: block;
+}
+
+#charts {
+    width: 420px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+#population-chart {
+    flex: 1;
+    min-height: 200px;
+    border-bottom: 1px solid #333;
+}
+
+#food-web-chart {
+    height: 300px;
+    flex-shrink: 0;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    #main {
+        flex-direction: column;
+    }
+
+    #canvas-container {
+        height: 50vh;
+        border-right: none;
+        border-bottom: 1px solid #333;
+    }
+
+    #charts {
+        width: 100%;
+        flex-direction: row;
+    }
+
+    #population-chart {
+        flex: 1;
+        min-height: 200px;
+        border-bottom: none;
+        border-right: 1px solid #333;
+    }
+
+    #food-web-chart {
+        flex: 1;
+        height: auto;
+        min-height: 200px;
+    }
+}
